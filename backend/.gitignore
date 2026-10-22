@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*$py.class
+uploads/*.pdf
+uploads/*.png
+uploads/*.jpg
+uploads/*.jpeg
+uploads/*.tiff
+uploads/.documents_cache.json
+!uploads/.gitkeep
+.env
+venv/
