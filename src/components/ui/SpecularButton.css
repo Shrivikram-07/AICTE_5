@@ -73,6 +73,15 @@
   font-size: 1rem;
 }
 
+.specular-button--icon {
+  height: 36px;
+  width: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .specular-button__light {
   position: absolute;
   inset: -24px;

@@ -167,7 +167,7 @@ const link = (gl: WebGL2RenderingContext): WebGLProgram | null => {
 
 export interface SpecularButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children?: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'icon';
   radius?: number;
   tint?: string;
   tintOpacity?: number;
@@ -255,16 +255,21 @@ export const SpecularButton = React.forwardRef<HTMLButtonElement, SpecularButton
       const canvas = canvasRef.current;
       if (!button || !canvas) return undefined;
 
-      const gl = canvas.getContext('webgl2', {
-        alpha: true,
-        premultipliedAlpha: true,
-        antialias: false,
-        depth: false,
-        stencil: false,
-        preserveDrawingBuffer: true,
-      });
+      let gl: WebGL2RenderingContext | null = null;
+      try {
+        gl = canvas.getContext('webgl2', {
+          alpha: true,
+          premultipliedAlpha: true,
+          antialias: false,
+          depth: false,
+          stencil: false,
+          preserveDrawingBuffer: true,
+        });
+      } catch {
+        gl = null;
+      }
 
-      if (!gl) {
+      if (!gl || gl.isContextLost()) {
         setWebglActive(false);
         return undefined;
       }
