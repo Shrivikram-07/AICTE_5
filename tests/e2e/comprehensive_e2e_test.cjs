@@ -36,6 +36,8 @@ async function runE2ETests() {
     // -------------------------------------------------------------
     console.log('\n--- Test Suite 1: Command Centre Dashboard ---');
     await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' });
+    await page.evaluate(() => localStorage.clear());
+    await page.reload({ waitUntil: 'networkidle' });
     
     const title = await page.title();
     const hasCommandCentreHeading = await page.locator('text=Regulatory Command Centre').isVisible();
@@ -104,16 +106,19 @@ async function runE2ETests() {
     if (fs.existsSync(invalidFilePath)) fs.unlinkSync(invalidFilePath);
 
     // Test genuine PDF upload
-    const fixturePdfPath = path.resolve(__dirname, '../../backend/tests/fixtures/test_fixture_valid_eoa.pdf');
-    if (!fs.existsSync(fixturePdfPath)) {
-      throw new Error('Fixture PDF does not exist at ' + fixturePdfPath);
+    const basePdfPath = path.resolve(__dirname, '../../backend/tests/fixtures/test_fixture_valid_eoa.pdf');
+    if (!fs.existsSync(basePdfPath)) {
+      throw new Error('Fixture PDF does not exist at ' + basePdfPath);
     }
+    const uniquePdfPath = path.resolve(__dirname, `../../backend/tests/fixtures/test_fixture_eoa_${Date.now()}.pdf`);
+    const originalBytes = fs.readFileSync(basePdfPath);
+    fs.writeFileSync(uniquePdfPath, Buffer.concat([originalBytes, Buffer.from(`\n% Unique Run ${Date.now()}\n`)]));
 
-    await fileInput.setInputFiles(fixturePdfPath);
+    await fileInput.setInputFiles(uniquePdfPath);
     await page.waitForTimeout(300);
 
-    const fileLoaded = await page.locator('text=test_fixture_valid_eoa.pdf').first().isVisible();
-    recordTest('Valid PDF Loaded in UI Dropzone', fileLoaded, 'test_fixture_valid_eoa.pdf attached');
+    const fileLoaded = await page.locator(`text=${path.basename(uniquePdfPath)}`).first().isVisible();
+    recordTest('Valid PDF Loaded in UI Dropzone', fileLoaded, `${path.basename(uniquePdfPath)} attached`);
 
     // Click "Execute Verification"
     const executeBtn = page.locator('button:has-text("Execute Verification")');
@@ -145,13 +150,15 @@ async function runE2ETests() {
     await docsTabBtn.click();
     await page.waitForTimeout(400);
 
-    const newDocInList = await page.locator('text=test_fixture_valid_eoa.pdf').isVisible();
+    const newDocInList = await page.locator(`text=${path.basename(uniquePdfPath)}`).isVisible();
     const realUploadBadge = await page.locator('text=Real Upload').first().isVisible();
     recordTest(
       'Uploaded Document Present in Workspace Documents Tab',
       newDocInList && realUploadBadge,
       'Document badge: REAL UPLOAD · FASTAPI'
     );
+
+    if (fs.existsSync(uniquePdfPath)) fs.unlinkSync(uniquePdfPath);
 
     // -------------------------------------------------------------
     // 4. Document Inspector Modal
@@ -184,7 +191,8 @@ async function runE2ETests() {
     // Close Inspector
     const closeInspectorBtn = page.locator('button:has-text("Done Inspecting")');
     await closeInspectorBtn.click();
-    await page.waitForTimeout(400);
+    await page.waitForSelector('text=Genuine Ingested Evidence', { state: 'detached', timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(500);
 
     // -------------------------------------------------------------
     // 5. Finding Review & Risk Score Persistence
@@ -196,7 +204,7 @@ async function runE2ETests() {
     await page.waitForTimeout(400);
 
     // Click "Inspect Finding" on fnd-01 (Simulated Expired Affiliation Certificate, weight 25)
-    const reviewFindingBtn = page.locator('text=Inspect Finding').first();
+    const reviewFindingBtn = page.locator('text=fnd-01').locator('..').locator('..').locator('text=Inspect Finding');
     await reviewFindingBtn.click();
     await page.waitForTimeout(500);
 
@@ -217,8 +225,7 @@ async function runE2ETests() {
     );
 
     // Now open again and resolve finding
-    const reviewFindingBtn2 = page.locator('text=Inspect Finding').first();
-    await reviewFindingBtn2.click();
+    await page.locator('text=fnd-01').locator('..').locator('..').locator('text=Inspect Finding').click();
     await page.waitForTimeout(500);
 
     const notesInput = page.locator('textarea').first();

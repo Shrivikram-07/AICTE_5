@@ -18,18 +18,19 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         <SpecularButton
           ref={ref}
           size={specularSize}
-          radius={specularProps?.radius ?? 10}
-          tint={specularProps?.tint ?? '#1e3a8a'}
-          tintOpacity={specularProps?.tintOpacity ?? 0.85}
+          radius={specularProps?.radius ?? 8}
+          tint={specularProps?.tint ?? '#1d4ed8'}
+          tintOpacity={specularProps?.tintOpacity ?? 0.9}
           textColor={specularProps?.textColor ?? '#ffffff'}
-          lineColor={specularProps?.lineColor ?? '#93c5fd'}
-          baseColor={specularProps?.baseColor ?? '#1e293b'}
-          intensity={specularProps?.intensity ?? 1.2}
-          idleIntensity={specularProps?.idleIntensity ?? 0.45}
-          glow={specularProps?.glow ?? 1.1}
-          thickness={specularProps?.thickness ?? 1.4}
+          lineColor={specularProps?.lineColor ?? '#bfdbfe'}
+          baseColor={specularProps?.baseColor ?? '#1e3a8a'}
+          intensity={specularProps?.intensity ?? 1.3}
+          idleIntensity={specularProps?.idleIntensity ?? 0.5}
+          glow={specularProps?.glow ?? 1.2}
+          thickness={specularProps?.thickness ?? 1.5}
           followMouse={specularProps?.followMouse ?? true}
-          autoAnimate={specularProps?.autoAnimate ?? false}
+          autoAnimate={specularProps?.autoAnimate ?? true}
+          speed={specularProps?.speed ?? 0.4}
           className={cn('font-semibold shadow-md', className)}
           {...props}
           {...specularProps}

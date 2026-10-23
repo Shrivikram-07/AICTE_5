@@ -49,15 +49,12 @@ export function ApplicationReviewWorkspace() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
-  const validTab: 'overview' | 'documents' | 'compliance' | 'verification' =
+  const activeTab: 'overview' | 'documents' | 'compliance' | 'verification' =
     requestedTab && ['overview', 'documents', 'compliance', 'verification'].includes(requestedTab)
       ? (requestedTab as 'overview' | 'documents' | 'compliance' | 'verification')
       : 'overview';
 
-  const [activeTab, setActiveTabState] = useState<'overview' | 'documents' | 'compliance' | 'verification'>(validTab);
-
   const setActiveTab = (tab: 'overview' | 'documents' | 'compliance' | 'verification') => {
-    setActiveTabState(tab);
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);

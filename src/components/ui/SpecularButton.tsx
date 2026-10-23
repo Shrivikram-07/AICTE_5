@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './SpecularButton.css';
 
 const PAD = 24;
@@ -197,23 +197,23 @@ export const SpecularButton = React.forwardRef<HTMLButtonElement, SpecularButton
     {
       children = 'Get Started',
       size = 'lg',
-      radius = 18,
-      tint = '#ffffff',
-      tintOpacity = 0.04,
+      radius = 10,
+      tint = '#1d4ed8',
+      tintOpacity = 0.9,
       blur = 0,
-      textColor = '#f5f5f5',
-      lineColor = '#ffffff',
-      baseColor = '#525252',
-      intensity = 1,
-      idleIntensity = 0.35,
-      shineSize = 10,
-      shineFade = 34,
-      thickness = 1.2,
-      glow = 1,
-      speed = 0.35,
+      textColor = '#ffffff',
+      lineColor = '#bfdbfe',
+      baseColor = '#1e3a8a',
+      intensity = 1.3,
+      idleIntensity = 0.5,
+      shineSize = 14,
+      shineFade = 36,
+      thickness = 1.4,
+      glow = 1.2,
+      speed = 0.4,
       followMouse = true,
       proximity = 250,
-      autoAnimate = false,
+      autoAnimate = true,
       disabled = false,
       onClick,
       className = '',
@@ -224,271 +224,295 @@ export const SpecularButton = React.forwardRef<HTMLButtonElement, SpecularButton
     forwardedRef
   ) => {
     const buttonRef = useRef<HTMLButtonElement | null>(null);
+    const [webglActive, setWebglActive] = useState(true);
 
     React.useImperativeHandle(forwardedRef, () => buttonRef.current as HTMLButtonElement);
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const wakeRef = useRef<(() => void) | null>(null);
 
-  const settings = {
-    radius: Math.max(0, radius),
-    lineColor: String(lineColor),
-    baseColor: String(baseColor),
-    intensity: Math.max(0, intensity),
-    idleIntensity: clamp(idleIntensity, 0, 1),
-    shineSize: Math.max(0, shineSize),
-    shineFade: Math.max(0, shineFade),
-    thickness: Math.max(0, thickness),
-    glow: Math.max(0, glow),
-    speed,
-    followMouse,
-    proximity: Math.max(1, proximity),
-    autoAnimate,
-    disabled,
-  };
-  const settingsRef = useRef(settings);
-  settingsRef.current = settings;
+    const settings = {
+      radius: Math.max(0, radius),
+      lineColor: String(lineColor),
+      baseColor: String(baseColor),
+      intensity: Math.max(0, intensity),
+      idleIntensity: clamp(idleIntensity, 0, 1),
+      shineSize: Math.max(0, shineSize),
+      shineFade: Math.max(0, shineFade),
+      thickness: Math.max(0, thickness),
+      glow: Math.max(0, glow),
+      speed,
+      followMouse,
+      proximity: Math.max(1, proximity),
+      autoAnimate,
+      disabled,
+    };
+    const settingsRef = useRef(settings);
+    settingsRef.current = settings;
 
-  useEffect(() => {
-    const button = buttonRef.current;
-    const canvas = canvasRef.current;
-    const gl = canvas?.getContext('webgl2', {
-      alpha: true,
-      premultipliedAlpha: true,
-      antialias: false,
-      depth: false,
-      stencil: false,
-    });
-    if (!button || !canvas || !gl) return undefined;
-    const program = link(gl);
-    if (!program) return undefined;
+    useEffect(() => {
+      const button = buttonRef.current;
+      const canvas = canvasRef.current;
+      if (!button || !canvas) return undefined;
 
-    const uniforms: Partial<Record<UniformName, WebGLUniformLocation | null>> = {};
-    for (const name of UNIFORMS) uniforms[name] = gl.getUniformLocation(program, name);
+      const gl = canvas.getContext('webgl2', {
+        alpha: true,
+        premultipliedAlpha: true,
+        antialias: false,
+        depth: false,
+        stencil: false,
+        preserveDrawingBuffer: true,
+      });
 
-    const buffer = gl.createBuffer();
-    const vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    gl.bindVertexArray(null);
-
-    const probe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-    const colors = new Map<string, [number, number, number]>();
-    const view = { width: 1, height: 1, ratio: 1 };
-    const pointer = { x: 0, y: 0, known: false };
-    const state = { spot: 0, level: 0, press: 0, ready: false };
-    let raf = 0;
-    let last = 0;
-    let visible = true;
-
-    const toRgb = (value: string): [number, number, number] => {
-      if (colors.has(value)) return colors.get(value)!;
-      let rgb: [number, number, number] = [1, 1, 1];
-      if (probe) {
-        probe.clearRect(0, 0, 1, 1);
-        probe.fillStyle = '#000000';
-        probe.fillStyle = value;
-        probe.fillRect(0, 0, 1, 1);
-        const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
-        rgb = [r / 255, g / 255, b / 255];
+      if (!gl) {
+        setWebglActive(false);
+        return undefined;
       }
-      colors.set(value, rgb);
-      return rgb;
-    };
 
-    const cornerRadius = (s: typeof settings) => Math.min(s.radius, view.width / 2, view.height / 2);
+      const handleContextLost = (e: Event) => {
+        e.preventDefault();
+        setWebglActive(false);
+      };
+      canvas.addEventListener('webglcontextlost', handleContextLost);
 
-    const restSpot = (s: typeof settings) => {
-      const r = cornerRadius(s);
-      const inset = r * (1 - Math.SQRT1_2);
-      return loopPosition(inset - view.width / 2, view.height / 2 - inset, view.width / 2, view.height / 2, r);
-    };
+      const program = link(gl);
+      if (!program) {
+        setWebglActive(false);
+        return undefined;
+      }
 
-    const aim = (s: typeof settings) => {
-      if (!s.followMouse || s.disabled || !pointer.known) return null;
-      const rect = button.getBoundingClientRect();
-      const scale = rect.width / view.width || 1;
-      const halfX = view.width / 2;
-      const halfY = view.height / 2;
-      const x = (pointer.x - rect.left - rect.width / 2) / scale;
-      const y = (rect.top + rect.height / 2 - pointer.y) / scale;
-      const distance = Math.hypot(Math.max(Math.abs(x) - halfX, 0), Math.max(Math.abs(y) - halfY, 0));
-      const t = clamp(1 - distance / s.proximity, 0, 1);
-      const near = t * t * (3 - 2 * t);
-      const nearest = loopPosition(x, y, halfX, halfY, cornerRadius(s));
-      if (distance > 0) return { spot: nearest, near };
-      const depth = clamp(Math.min(halfX - Math.abs(x), halfY - Math.abs(y)) / (halfY * 0.8), 0, 1);
-      const sway = restSpot(s) - (x / halfX) * 0.06 - (y / halfY) * 0.02;
-      const offset = sway - nearest - Math.round(sway - nearest);
-      return { spot: wrap(nearest + offset * depth * depth * (3 - 2 * depth)), near };
-    };
+      const uniforms: Partial<Record<UniformName, WebGLUniformLocation | null>> = {};
+      for (const name of UNIFORMS) uniforms[name] = gl.getUniformLocation(program, name);
 
-    const draw = (s: typeof settings) => {
-      const { width, height } = view;
-      const scaleX = canvas.width / (width + PAD * 2);
-      const scaleY = canvas.height / (height + PAD * 2);
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(program);
-      if (uniforms.uCenter) gl.uniform2f(uniforms.uCenter, (PAD + width / 2) * scaleX, (PAD + height / 2) * scaleY);
-      if (uniforms.uHalf) gl.uniform2f(uniforms.uHalf, (width / 2) * scaleX, (height / 2) * scaleY);
-      if (uniforms.uRadius) gl.uniform1f(uniforms.uRadius, Math.min(s.radius, width / 2, height / 2) * scaleX);
-      if (uniforms.uPx) gl.uniform1f(uniforms.uPx, view.ratio);
-      const r = Math.min(s.radius, width / 2, height / 2);
-      const [rimX, rimY] = rimPoint(state.spot, width / 2, height / 2, r);
-      const pull = 1 - Math.min(0.35 * (height / 2), Math.hypot(rimX, rimY)) / Math.max(Math.hypot(rimX, rimY), 0.0001);
-      if (uniforms.uSpot) gl.uniform1f(uniforms.uSpot, state.spot);
-      if (uniforms.uEntry) gl.uniform2f(uniforms.uEntry, rimX * pull * scaleX, rimY * pull * scaleY);
-      if (uniforms.uLineColor) gl.uniform3fv(uniforms.uLineColor, toRgb(s.lineColor));
-      if (uniforms.uBaseColor) gl.uniform3fv(uniforms.uBaseColor, toRgb(s.baseColor));
-      if (uniforms.uIntensity) gl.uniform1f(uniforms.uIntensity, s.intensity * (state.level + state.press * 0.8));
-      if (uniforms.uWindow) gl.uniform2f(uniforms.uWindow, s.shineSize / 360 + state.press * 0.06, s.shineFade / 360 + 0.0001);
-      if (uniforms.uThickness) gl.uniform1f(uniforms.uThickness, s.thickness);
-      if (uniforms.uGlow) gl.uniform1f(uniforms.uGlow, s.glow);
+      const buffer = gl.createBuffer();
+      const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
       gl.bindVertexArray(null);
-    };
 
-    const frame = (now: number) => {
-      raf = 0;
-      if (!visible) return;
-      const s = settingsRef.current;
-      const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
-      last = now;
-      const target = aim(s);
-      const spinning = s.autoAnimate && !reduce;
-      const steering = !!target && target.near > 0;
-      if (!state.ready) {
-        state.spot = restSpot(s);
-        state.level = s.autoAnimate ? 1 : s.idleIntensity;
-        state.ready = true;
-      }
-      let diff = 0;
-      if (spinning && !steering) state.spot = wrap(state.spot + (s.speed / TAU) * dt);
-      else {
-        diff = (steering ? target.spot : restSpot(s)) - state.spot;
-        diff -= Math.round(diff);
-        state.spot = wrap(state.spot + diff * (1 - Math.exp(-dt * 8)));
-      }
-      const level = s.autoAnimate ? 1 : s.idleIntensity + (1 - s.idleIntensity) * (target ? target.near : 0);
-      state.level += (level - state.level) * (1 - Math.exp(-dt * 7));
-      state.press *= Math.exp(-dt * 5);
-      draw(s);
-      const settling = Math.abs(diff) > 0.0002 || Math.abs(level - state.level) > 0.001 || state.press > 0.002;
-      if (settling || (spinning && !steering)) raf = requestAnimationFrame(frame);
-      else last = 0;
-    };
+      const probe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+      const colors = new Map<string, [number, number, number]>();
+      const view = { width: 1, height: 1, ratio: 1 };
+      const pointer = { x: 0, y: 0, known: false };
+      const state = { spot: 0, level: 0, press: 0, ready: false };
+      let raf = 0;
+      let last = 0;
+      let visible = true;
 
-    const wake = () => {
-      if (!raf && visible) raf = requestAnimationFrame(frame);
-    };
+      const toRgb = (value: string): [number, number, number] => {
+        if (colors.has(value)) return colors.get(value)!;
+        let rgb: [number, number, number] = [1, 1, 1];
+        if (probe) {
+          probe.clearRect(0, 0, 1, 1);
+          probe.fillStyle = '#000000';
+          probe.fillStyle = value;
+          probe.fillRect(0, 0, 1, 1);
+          const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
+          rgb = [r / 255, g / 255, b / 255];
+        }
+        colors.set(value, rgb);
+        return rgb;
+      };
 
-    const measure = (entry?: ResizeObserverEntry) => {
-      const box = entry?.borderBoxSize?.[0];
-      view.width = Math.max(1, box ? box.inlineSize : button.offsetWidth);
-      view.height = Math.max(1, box ? box.blockSize : button.offsetHeight);
-      view.ratio = Math.min(window.devicePixelRatio || 1, 3);
-      canvas.width = Math.max(1, Math.round((view.width + PAD * 2) * view.ratio));
-      canvas.height = Math.max(1, Math.round((view.height + PAD * 2) * view.ratio));
-      if (state.ready) draw(settingsRef.current);
-      wake();
-    };
+      const cornerRadius = (s: typeof settings) => Math.min(s.radius, view.width / 2, view.height / 2);
 
-    const onPointerMove = (event: PointerEvent) => {
-      pointer.x = event.clientX;
-      pointer.y = event.clientY;
-      pointer.known = true;
-      wake();
-    };
+      const restSpot = (s: typeof settings) => {
+        const r = cornerRadius(s);
+        const inset = r * (1 - Math.SQRT1_2);
+        return loopPosition(inset - view.width / 2, view.height / 2 - inset, view.width / 2, view.height / 2, r);
+      };
 
-    const onPointerDown = (event: PointerEvent) => {
-      pointer.x = event.clientX;
-      pointer.y = event.clientY;
-      pointer.known = true;
-      if (!settingsRef.current.disabled) state.press = 1;
-      wake();
-    };
+      const aim = (s: typeof settings) => {
+        if (!s.followMouse || s.disabled || !pointer.known) return null;
+        const rect = button.getBoundingClientRect();
+        const scale = rect.width / view.width || 1;
+        const halfX = view.width / 2;
+        const halfY = view.height / 2;
+        const x = (pointer.x - rect.left - rect.width / 2) / scale;
+        const y = (rect.top + rect.height / 2 - pointer.y) / scale;
+        const distance = Math.hypot(Math.max(Math.abs(x) - halfX, 0), Math.max(Math.abs(y) - halfY, 0));
+        const t = clamp(1 - distance / s.proximity, 0, 1);
+        const near = t * t * (3 - 2 * t);
+        const nearest = loopPosition(x, y, halfX, halfY, cornerRadius(s));
+        if (distance > 0) return { spot: nearest, near };
+        const depth = clamp(Math.min(halfX - Math.abs(x), halfY - Math.abs(y)) / (halfY * 0.8), 0, 1);
+        const sway = restSpot(s) - (x / halfX) * 0.06 - (y / halfY) * 0.02;
+        const offset = sway - nearest - Math.round(sway - nearest);
+        return { spot: wrap(nearest + offset * depth * depth * (3 - 2 * depth)), near };
+      };
 
-    const onPointerEnd = (event: PointerEvent) => {
-      if (event.pointerType === 'mouse') return;
-      pointer.known = false;
-      wake();
-    };
+      const draw = (s: typeof settings) => {
+        if (gl.isContextLost()) return;
+        const { width, height } = view;
+        const scaleX = canvas.width / (width + PAD * 2);
+        const scaleY = canvas.height / (height + PAD * 2);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(program);
+        if (uniforms.uCenter) gl.uniform2f(uniforms.uCenter, (PAD + width / 2) * scaleX, (PAD + height / 2) * scaleY);
+        if (uniforms.uHalf) gl.uniform2f(uniforms.uHalf, (width / 2) * scaleX, (height / 2) * scaleY);
+        if (uniforms.uRadius) gl.uniform1f(uniforms.uRadius, Math.min(s.radius, width / 2, height / 2) * scaleX);
+        if (uniforms.uPx) gl.uniform1f(uniforms.uPx, view.ratio);
+        const r = Math.min(s.radius, width / 2, height / 2);
+        const [rimX, rimY] = rimPoint(state.spot, width / 2, height / 2, r);
+        const pull = 1 - Math.min(0.35 * (height / 2), Math.hypot(rimX, rimY)) / Math.max(Math.hypot(rimX, rimY), 0.0001);
+        if (uniforms.uSpot) gl.uniform1f(uniforms.uSpot, state.spot);
+        if (uniforms.uEntry) gl.uniform2f(uniforms.uEntry, rimX * pull * scaleX, rimY * pull * scaleY);
+        if (uniforms.uLineColor) gl.uniform3fv(uniforms.uLineColor, toRgb(s.lineColor));
+        if (uniforms.uBaseColor) gl.uniform3fv(uniforms.uBaseColor, toRgb(s.baseColor));
+        if (uniforms.uIntensity) gl.uniform1f(uniforms.uIntensity, s.intensity * (state.level + state.press * 0.8));
+        if (uniforms.uWindow) gl.uniform2f(uniforms.uWindow, s.shineSize / 360 + state.press * 0.06, s.shineFade / 360 + 0.0001);
+        if (uniforms.uThickness) gl.uniform1f(uniforms.uThickness, s.thickness);
+        if (uniforms.uGlow) gl.uniform1f(uniforms.uGlow, s.glow);
+        gl.bindVertexArray(vao);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindVertexArray(null);
+      };
 
-    const onPointerLeave = () => {
-      pointer.known = false;
-      wake();
-    };
+      const frame = (now: number) => {
+        raf = 0;
+        if (!visible) return;
+        const s = settingsRef.current;
+        const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
+        last = now;
+        const target = aim(s);
+        const spinning = s.autoAnimate && !reduce;
+        const steering = !!target && target.near > 0;
+        if (!state.ready) {
+          state.spot = restSpot(s);
+          state.level = s.autoAnimate ? 1 : s.idleIntensity;
+          state.ready = true;
+        }
+        let diff = 0;
+        if (spinning && !steering) state.spot = wrap(state.spot + (s.speed / TAU) * dt);
+        else {
+          diff = (steering ? target.spot : restSpot(s)) - state.spot;
+          diff -= Math.round(diff);
+          state.spot = wrap(state.spot + diff * (1 - Math.exp(-dt * 8)));
+        }
+        const level = s.autoAnimate ? 1 : s.idleIntensity + (1 - s.idleIntensity) * (target ? target.near : 0);
+        state.level += (level - state.level) * (1 - Math.exp(-dt * 7));
+        state.press *= Math.exp(-dt * 5);
+        draw(s);
+        const settling = Math.abs(diff) > 0.0002 || Math.abs(level - state.level) > 0.001 || state.press > 0.002;
+        if (settling || (spinning && !steering)) raf = requestAnimationFrame(frame);
+        else last = 0;
+      };
 
-    const resizeObserver = new ResizeObserver((entries) => measure(entries[entries.length - 1]));
-    resizeObserver.observe(button);
-    const intersection = new IntersectionObserver((entries) => {
-      visible = entries.some((entry) => entry.isIntersecting);
-      if (visible) {
-        last = 0;
+      const wake = () => {
+        if (!raf && visible) raf = requestAnimationFrame(frame);
+      };
+
+      const measure = (entry?: ResizeObserverEntry) => {
+        const box = entry?.borderBoxSize?.[0];
+        view.width = Math.max(1, box ? box.inlineSize : button.offsetWidth);
+        view.height = Math.max(1, box ? box.blockSize : button.offsetHeight);
+        view.ratio = Math.min(window.devicePixelRatio || 1, 3);
+        canvas.width = Math.max(1, Math.round((view.width + PAD * 2) * view.ratio));
+        canvas.height = Math.max(1, Math.round((view.height + PAD * 2) * view.ratio));
+        if (state.ready) draw(settingsRef.current);
         wake();
-      }
+      };
+
+      const onPointerMove = (event: PointerEvent) => {
+        pointer.x = event.clientX;
+        pointer.y = event.clientY;
+        pointer.known = true;
+        wake();
+      };
+
+      const onPointerDown = (event: PointerEvent) => {
+        pointer.x = event.clientX;
+        pointer.y = event.clientY;
+        pointer.known = true;
+        if (!settingsRef.current.disabled) state.press = 1;
+        wake();
+      };
+
+      const onPointerEnd = (event: PointerEvent) => {
+        if (event.pointerType === 'mouse') return;
+        pointer.known = false;
+        wake();
+      };
+
+      const onPointerLeave = () => {
+        pointer.known = false;
+        wake();
+      };
+
+      const resizeObserver = new ResizeObserver((entries) => measure(entries[entries.length - 1]));
+      resizeObserver.observe(button);
+      const intersection = new IntersectionObserver((entries) => {
+        visible = entries.some((entry) => entry.isIntersecting);
+        if (visible) {
+          last = 0;
+          wake();
+        }
+      });
+      intersection.observe(button);
+      window.addEventListener('pointermove', onPointerMove, { passive: true });
+      window.addEventListener('pointerup', onPointerEnd, { passive: true });
+      window.addEventListener('pointercancel', onPointerEnd, { passive: true });
+      document.documentElement.addEventListener('pointerleave', onPointerLeave);
+      button.addEventListener('pointerdown', onPointerDown);
+      measure();
+      wakeRef.current = wake;
+
+      return () => {
+        cancelAnimationFrame(raf);
+        wakeRef.current = null;
+        resizeObserver.disconnect();
+        intersection.disconnect();
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerEnd);
+        window.removeEventListener('pointercancel', onPointerEnd);
+        document.documentElement.removeEventListener('pointerleave', onPointerLeave);
+        button.removeEventListener('pointerdown', onPointerDown);
+        canvas.removeEventListener('webglcontextlost', handleContextLost);
+        try {
+          gl.deleteBuffer(buffer);
+          gl.deleteVertexArray(vao);
+          gl.deleteProgram(program);
+        } catch {}
+      };
+    }, []);
+
+    useEffect(() => {
+      wakeRef.current?.();
     });
-    intersection.observe(button);
-    window.addEventListener('pointermove', onPointerMove, { passive: true });
-    window.addEventListener('pointerup', onPointerEnd, { passive: true });
-    window.addEventListener('pointercancel', onPointerEnd, { passive: true });
-    document.documentElement.addEventListener('pointerleave', onPointerLeave);
-    button.addEventListener('pointerdown', onPointerDown);
-    measure();
-    wakeRef.current = wake;
 
-    return () => {
-      cancelAnimationFrame(raf);
-      wakeRef.current = null;
-      resizeObserver.disconnect();
-      intersection.disconnect();
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerEnd);
-      window.removeEventListener('pointercancel', onPointerEnd);
-      document.documentElement.removeEventListener('pointerleave', onPointerLeave);
-      button.removeEventListener('pointerdown', onPointerDown);
-      gl.deleteBuffer(buffer);
-      gl.deleteVertexArray(vao);
-      gl.deleteProgram(program);
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
-    };
-  }, []);
-
-  useEffect(() => {
-    wakeRef.current?.();
-  });
-
-  return (
-    <button
-      ref={buttonRef}
-      type={type}
-      disabled={disabled}
-      onClick={onClick}
-      className={`specular-button specular-button--${size}${className ? ` ${className}` : ''}`}
-      style={
-        {
-          '--sb-radius': `${radius}px`,
-          '--sb-tint': tint,
-          '--sb-tint-opacity': tintOpacity,
-          '--sb-blur': `${blur}px`,
-          '--sb-text-color': textColor,
-          ...style,
-        } as React.CSSProperties
-      }
-      {...rest}
-    >
-      <canvas ref={canvasRef} className="specular-button__light" aria-hidden="true" />
-      <span className="specular-button__label">{children}</span>
-    </button>
-  );
-});
+    return (
+      <button
+        ref={buttonRef}
+        type={type}
+        disabled={disabled}
+        onClick={onClick}
+        className={`specular-button specular-button--${size} ${!webglActive ? 'specular-button--fallback' : ''}${className ? ` ${className}` : ''}`}
+        style={
+          {
+            '--sb-radius': `${radius}px`,
+            '--sb-tint': tint,
+            '--sb-tint-opacity': tintOpacity,
+            '--sb-blur': `${blur}px`,
+            '--sb-text-color': textColor,
+            ...style,
+          } as React.CSSProperties
+        }
+        {...rest}
+      >
+        {webglActive && (
+          <canvas ref={canvasRef} className="specular-button__light" aria-hidden="true" />
+        )}
+        <span className="specular-button__label">{children}</span>
+      </button>
+    );
+  }
+);
 
 SpecularButton.displayName = 'SpecularButton';
 
