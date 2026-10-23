@@ -1,13 +1,44 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { SpecularButton, SpecularButtonProps } from './SpecularButton';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'specular';
   size?: 'sm' | 'md' | 'lg' | 'icon';
+  // Optional specular-specific overrides when variant === 'specular'
+  specularProps?: Partial<SpecularButtonProps>;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'primary', size = 'md', children, ...props }, ref) => {
+  ({ className, variant = 'primary', size = 'md', specularProps, children, ...props }, ref) => {
+    // If specular variant is selected, delegate to SpecularButton with AICTE Enterprise theme defaults
+    if (variant === 'specular') {
+      const specularSize: 'sm' | 'md' | 'lg' = size === 'icon' ? 'sm' : size;
+      return (
+        <SpecularButton
+          ref={ref}
+          size={specularSize}
+          radius={specularProps?.radius ?? 10}
+          tint={specularProps?.tint ?? '#1e3a8a'}
+          tintOpacity={specularProps?.tintOpacity ?? 0.85}
+          textColor={specularProps?.textColor ?? '#ffffff'}
+          lineColor={specularProps?.lineColor ?? '#93c5fd'}
+          baseColor={specularProps?.baseColor ?? '#1e293b'}
+          intensity={specularProps?.intensity ?? 1.2}
+          idleIntensity={specularProps?.idleIntensity ?? 0.45}
+          glow={specularProps?.glow ?? 1.1}
+          thickness={specularProps?.thickness ?? 1.4}
+          followMouse={specularProps?.followMouse ?? true}
+          autoAnimate={specularProps?.autoAnimate ?? false}
+          className={cn('font-semibold shadow-md', className)}
+          {...props}
+          {...specularProps}
+        >
+          {children}
+        </SpecularButton>
+      );
+    }
+
     const variantStyles = {
       primary: 'bg-blue-700 hover:bg-blue-800 text-white shadow-sm focus-visible:ring-blue-500',
       secondary: 'bg-slate-100 hover:bg-slate-200 text-slate-900 focus-visible:ring-slate-400',
@@ -42,3 +73,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 
 Button.displayName = 'Button';
+
+export { SpecularButton };
+export type { SpecularButtonProps };
+

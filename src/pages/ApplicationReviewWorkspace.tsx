@@ -194,12 +194,12 @@ export function ApplicationReviewWorkspace() {
             </Button>
 
             <Button
-              variant="primary"
+              variant="specular"
               size="sm"
               onClick={() => runValidationSimulation(application.id)}
-              className="gap-1.5 text-xs shadow-md shadow-blue-600/20 bg-blue-700 hover:bg-blue-800"
+              className="gap-1.5 text-xs shadow-md"
             >
-              <Play className="h-3.5 w-3.5 fill-current" />
+              <Play className="h-3.5 w-3.5 fill-current text-blue-200" />
               Run Validation
             </Button>
           </div>

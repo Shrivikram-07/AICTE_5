@@ -117,9 +117,9 @@ export function CommandCentre() {
             Export Summary
           </Button>
           <Button
-            variant="primary"
+            variant="specular"
             size="sm"
-            className="gap-1.5 text-xs shadow-sm"
+            className="gap-1.5 text-xs shadow-md"
             onClick={() => {
               navigate('/applications/demo-eoa-0142/review');
             }}
@@ -257,9 +257,9 @@ export function CommandCentre() {
                   Quick Drawer
                 </Button>
                 <Button
-                  variant="primary"
+                  variant="specular"
                   size="sm"
-                  className="text-xs font-semibold gap-1.5 bg-blue-700 hover:bg-blue-800 shadow-sm"
+                  className="text-xs font-semibold gap-1.5 shadow-md"
                   onClick={() => navigate(`/applications/${primaryCase.id}/review`)}
                 >
                   <span>Launch Scrutiny Workspace</span>
